@@ -82,6 +82,10 @@ class ApiClient {
     return data;
   }
 
+  async getUpstream() {
+    return this.request('/upstream');
+  }
+
   async getSession() {
     const data = await this.request('/session');
     if (data.csrf_token) this.setCsrfToken(data.csrf_token);

@@ -31,7 +31,9 @@ const messages = {
       "useEmailPassword": "使用邮箱密码登录",
       "usePat": "使用永久访问令牌登录",
       "email": "邮箱",
-      "passwordCompatibilityNotice": "若 NovelAI 官方今后要求验证码，邮箱密码登录将无法使用，请改用 PAT。"
+      "passwordCompatibilityNotice": "若 NovelAI 官方今后要求验证码，邮箱密码登录将无法使用，请改用 PAT。",
+      "takomaToken": "Takoma API Key",
+      "takomaHint": "当前连接 Takoma。请粘贴 Takoma API Key；邮箱密码登录不可用。"
     },
     "loggingIn": "登录中...",
     "password": "密码",

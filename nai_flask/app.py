@@ -55,7 +55,7 @@ from api_utils.local_image_library import LocalImageLibrary
 from api_utils.local_inference import LocalInference
 from api_utils.migrate_reference_library import migrate_reference_library
 from api_utils.image_validation import validate_base64_image, validate_generation_images
-from api_utils.novelai_client import NovelAIClient, NovelAIUpstreamError
+from api_utils.novelai_client import NovelAIClient, NovelAIUpstreamError, resolve_upstream
 from api_utils.prompt_tags import TAG_DATABASE, normalize_tag
 from api_utils.novelai_payload_builder import (
     ALL_MODELS,
@@ -82,6 +82,7 @@ LAN_IPV4_NETWORKS = tuple(ipaddress.ip_network(value) for value in ("10.0.0.0/8"
 LOCAL_CONFIG_KEYS = frozenset({
     "port",
     "data_dir",
+    "upstream",
     "upstream_timeout_seconds",
     "allow_lan",
     "inference_models_dir",
@@ -949,9 +950,17 @@ def create_app(
         "http://[::1]:3000",
     }
 
+    upstream_name = os.getenv("NOVELAI_UPSTREAM") or str(app.config.get("UPSTREAM") or "official")
+    try:
+        upstream_name, _origin, upstream_host = resolve_upstream(upstream_name)
+    except ValueError as exc:
+        raise ValueError("upstream must be official or takoma.") from exc
+    app.config["UPSTREAM"] = upstream_name
+    app.config["UPSTREAM_HOST"] = upstream_host
     app.extensions["novelai_client"] = novelai_client or NovelAIClient(
         app.config["UPSTREAM_TIMEOUT_SECONDS"],
         tls_bindings_path=Path(app.config["DATA_DIR"]) / "novelai-tls-bindings.json",
+        upstream=upstream_name,
     )
     app.extensions["local_store"] = LocalJsonStore(
         app.config["DATA_DIR"],
@@ -1216,6 +1225,16 @@ def create_app(
             "authenticated": True,
             "csrf_token": entry["csrf_token"],
             "account_snapshot": entry["account_snapshot"],
+        })
+
+    @app.get("/api/upstream")
+    def upstream_profile() -> Response:
+        """公开当前固定上游，不返回凭据。"""
+
+        provider = app.config["UPSTREAM"]
+        return jsonify({
+            "provider": provider,
+            "password_login": provider != "takoma",
         })
 
     @app.post("/api/session/persistent-token")
@@ -2457,10 +2476,11 @@ def create_app(
 
     app.logger.info(
         "event=service_initialized bind=%s:%d threads=4 storage=local_json+sqlite+image_files "
-        "frontend_built=%s upstream_host=image.novelai.net upstream_timeout_seconds=%.1f",
+        "frontend_built=%s upstream_host=%s upstream_timeout_seconds=%.1f",
         app.config["HOST"],
         app.config["PORT"],
         str((Path(app.config["FRONTEND_OUT_DIR"]) / "index.html").is_file()).lower(),
+        app.config["UPSTREAM_HOST"],
         float(app.config["UPSTREAM_TIMEOUT_SECONDS"]),
     )
     return app

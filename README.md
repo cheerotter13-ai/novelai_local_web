@@ -154,6 +154,11 @@ cd novelai_local_web
 
 若手机仍打不开页面，检查 Python 的防火墙规则，以及路由器是否启用了访客网络或 AP / 客户端隔离。
 
+
+## 本仓库相对上游的改动
+
+本仓库基于 [YILING0013/novelai_local_web](https://github.com/YILING0013/novelai_local_web)，许可证仍为 AGPL-3.0。2026-10-12 增加了一个固定的 Takoma 上游，不接受任意代理地址。官方模式保持原有行为。
+
 ## 配置与数据
 
 ### 服务配置
@@ -175,7 +180,9 @@ Copy-Item .\nai_flask\config.example.json .\nai_flask\config.local.json
 }
 ```
 
-`allow_lan` 默认 `false`，仅监听本机；设为 `true` 后允许通过电脑的局域网 IPv4 地址访问。`data_dir` 的相对路径以 `nai_flask` 为基准，也可填写绝对路径，例如 `E:/NovelAIData`。配置修改后重启后端；不要在此文件中保存账户凭据。
+`allow_lan` 默认 `false`，仅监听本机；设为 `true` 后允许通过电脑的局域网 IPv4 地址访问。`data_dir` 的相对路径以 `nai_flask` 为基准，也可填写绝对路径。配置修改后重启后端；不要在此文件中保存账户凭据。
+
+`upstream` 只接受 `official` 或 `takoma`。默认连接 NovelAI 官方。设为 `takoma` 后，登录框填写 Takoma API Key，请求发往 `https://api.takoma.app`。Takoma 不支持邮箱密码登录，也不提供官方的 `/user/information`。也可以不改配置，直接双击 `start-takoma.bat`。不要在配置文件中保存密钥。
 
 ### 图片目录与工作区
 

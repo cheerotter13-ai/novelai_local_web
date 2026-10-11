@@ -38,8 +38,23 @@ from .account_change import (
 )
 
 
-NOVELAI_ORIGIN = "https://image.novelai.net"
-NOVELAI_HOST = "image.novelai.net"
+OFFICIAL_ORIGIN = "https://image.novelai.net"
+OFFICIAL_HOST = "image.novelai.net"
+TAKOMA_ORIGIN = "https://api.takoma.app"
+TAKOMA_HOST = "api.takoma.app"
+NOVELAI_ORIGIN = OFFICIAL_ORIGIN
+NOVELAI_HOST = OFFICIAL_HOST
+
+
+def resolve_upstream(name: str | None) -> tuple[str, str, str]:
+    """只允许官方或 Takoma 两个固定主机，不接受任意上游地址。"""
+
+    value = str(name or "official").strip().lower()
+    if value in {"official", "novelai"}:
+        return "official", OFFICIAL_ORIGIN, OFFICIAL_HOST
+    if value in {"takoma", "tkm"}:
+        return "takoma", TAKOMA_ORIGIN, TAKOMA_HOST
+    raise ValueError("upstream must be official or takoma.")
 MAX_UPSTREAM_BODY_BYTES = 80 * 1024 * 1024
 OFFICIAL_OPERATION_NAMES = {
     ("POST", "/user/login"): "password_login",
@@ -181,7 +196,7 @@ class _NovelAITLSAdapter(HTTPAdapter):
 
 
 class NovelAIClient:
-    """固定连接 NovelAI 官方图像主机，不接受运行时上游地址。"""
+    """只连接官方图像主机或固定的 Takoma API，不接受任意上游地址。"""
 
     def __init__(
         self,
@@ -189,16 +204,19 @@ class NovelAIClient:
         request_func: Callable[..., Any] | None = None,
         *,
         tls_bindings_path: str | os.PathLike[str] | None = None,
+        upstream: str = "official",
     ) -> None:
         """
-        初始化官方客户端。
+        初始化上游客户端。
 
         Args:
             timeout_seconds: 单次上游请求的读取超时秒数。
             request_func: 测试时可注入的 requests 兼容调用函数。
             tls_bindings_path: 本地指纹绑定文件；应用必须提供，省略时仅供隔离测试使用内存。
+            upstream: official 或 takoma。两者都是固定主机，不能填任意 URL。
         """
 
+        self.upstream, self.origin, self.host = resolve_upstream(upstream)
         self.timeout_seconds = float(timeout_seconds)
         self._request_func = request_func
         # 文件只保存凭据摘要和配置编号；原始 Token、access key 和密码不落盘。
@@ -331,9 +349,9 @@ class NovelAIClient:
 
         if not path.startswith("/"):
             raise ValueError("NovelAI API path must start with '/'.")
-        url = f"{NOVELAI_ORIGIN}{path}"
+        url = f"{self.origin}{path}"
         parsed = urlsplit(url)
-        if parsed.scheme != "https" or parsed.hostname != NOVELAI_HOST:
+        if parsed.scheme != "https" or parsed.hostname != self.host:
             raise ValueError("NovelAI API host is not allowed.")
 
         headers = dict(kwargs.pop("headers", {}) or {})
@@ -365,7 +383,7 @@ class NovelAIClient:
             "correlation_id=%s",
             operation_name,
             logged_method,
-            NOVELAI_HOST,
+            self.host,
             safe_correlation_id,
         )
         try:
@@ -385,7 +403,7 @@ class NovelAIClient:
                 "certain=false correlation_id=%s",
                 operation_name,
                 logged_method,
-                NOVELAI_HOST,
+                self.host,
                 (time.perf_counter() - started_at) * 1000,
                 safe_correlation_id,
             )
@@ -401,7 +419,7 @@ class NovelAIClient:
                 "error_code=NOVELAI_UNAVAILABLE certain=false correlation_id=%s",
                 operation_name,
                 logged_method,
-                NOVELAI_HOST,
+                self.host,
                 (time.perf_counter() - started_at) * 1000,
                 safe_correlation_id,
             )
@@ -441,7 +459,7 @@ class NovelAIClient:
             "result=%s elapsed_ms=%.2f error_code=%s certain=%s correlation_id=%s",
             operation_name,
             logged_method,
-            NOVELAI_HOST,
+            self.host,
             status_code,
             "success" if 200 <= status_code < 300 else (
                 "failed" if status_code >= 500 else "rejected"
@@ -679,6 +697,12 @@ class NovelAIClient:
             NovelAI 官方返回的访问令牌。
         """
 
+        if self.upstream == "takoma":
+            raise NovelAIUpstreamError(
+                "Takoma accepts an API key, not an email and password.",
+                400,
+                "TAKOMA_PASSWORD_LOGIN_UNSUPPORTED",
+            )
         access_key = derive_access_key(email, password)
         try:
             return self.login(access_key)
@@ -899,7 +923,7 @@ class NovelAIClient:
     ) -> Any:
         """发送一次绝不重试、绝不重定向的官方账户 mutation。"""
 
-        url = f"{NOVELAI_ORIGIN}{path}"
+        url = f"{self.origin}{path}"
         upstream_correlation_id = tools.correlation_id_generator()
         headers = {
             "Accept": "application/json",
@@ -925,7 +949,7 @@ class NovelAIClient:
             "correlation_id=%s",
             operation_name,
             logged_method,
-            NOVELAI_HOST,
+            self.host,
             safe_correlation_id,
         )
         try:
@@ -945,7 +969,7 @@ class NovelAIClient:
                 "error_code=ACCOUNT_CHANGE_UNCERTAIN certain=false correlation_id=%s",
                 operation_name,
                 logged_method,
-                NOVELAI_HOST,
+                self.host,
                 (time.perf_counter() - started_at) * 1000,
                 safe_correlation_id,
             )
@@ -959,7 +983,7 @@ class NovelAIClient:
                 "result=success elapsed_ms=%.2f certain=true correlation_id=%s",
                 operation_name,
                 logged_method,
-                NOVELAI_HOST,
+                self.host,
                 status_code,
                 (time.perf_counter() - started_at) * 1000,
                 safe_correlation_id,
@@ -971,7 +995,7 @@ class NovelAIClient:
                 "certain=true correlation_id=%s",
                 operation_name,
                 logged_method,
-                NOVELAI_HOST,
+                self.host,
                 status_code,
                 (time.perf_counter() - started_at) * 1000,
                 safe_correlation_id,
@@ -983,7 +1007,7 @@ class NovelAIClient:
                 "certain=false correlation_id=%s",
                 operation_name,
                 logged_method,
-                NOVELAI_HOST,
+                self.host,
                 status_code,
                 (time.perf_counter() - started_at) * 1000,
                 safe_correlation_id,
@@ -1077,6 +1101,9 @@ class NovelAIClient:
             包含 information 与 subscription 的账户快照。
         """
 
+        if self.upstream == "takoma":
+            subscription = self._json_object(self._request("GET", "/user/subscription", token=token))
+            return {"information": {}, "subscription": subscription}
         information = self._json_object(self._request("GET", "/user/information", token=token))
         subscription = self._json_object(self._request("GET", "/user/subscription", token=token))
         return {"information": information, "subscription": subscription}
@@ -1097,6 +1124,15 @@ class NovelAIClient:
             json=payload,
             headers={"Content-Type": "application/json", "Accept": "application/json"},
         )
+        content = bytes(getattr(response, "content", b"") or b"")
+        if zipfile.is_zipfile(io.BytesIO(content)):
+            image = self._binary_image(response)
+            return [{
+                "data": image["data"],
+                "mime_type": image["mime_type"],
+                "seed": None,
+                "index": 0,
+            }]
         return self._json_images(response)
 
     def encode_vibe(

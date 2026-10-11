@@ -31,7 +31,9 @@ const messages = {
       "useEmailPassword": "Sign in with email and password",
       "usePat": "Sign in with a persistent access token",
       "email": "Email",
-      "passwordCompatibilityNotice": "If NovelAI requires a verification challenge in the future, password login will be unavailable. Use a PAT instead."
+      "passwordCompatibilityNotice": "If NovelAI requires a verification challenge in the future, password login will be unavailable. Use a PAT instead.",
+      "takomaToken": "Takoma API key",
+      "takomaHint": "This app is connected to Takoma. Paste a Takoma API key; email login is unavailable."
     },
     "loggingIn": "Logging in...",
     "password": "Password",

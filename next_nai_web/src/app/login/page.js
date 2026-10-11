@@ -24,6 +24,7 @@ export default function LoginPage() {
   const [backgroundImage, setBackgroundImage] = useState('/reference_img/3GGAQa90Mj6TbucNXrQPUUd1wdSMVaEJ.webp');
   const [panelImage, setPanelImage] = useState('/reference_img/1rvLGpK6gQUlnDsdBUu9pFRZ2ByMn3Nj.webp');
   const [loginMode, setLoginMode] = useState('token');
+  const [upstream, setUpstream] = useState(null);
   const [token, setToken] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -85,6 +86,9 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!mounted) return;
+    apiClient.getUpstream()
+      .then((result) => setUpstream(result?.provider === 'takoma' ? result : null))
+      .catch(() => setUpstream(null));
     apiClient.getAccountRecovery()
       .then((result) => setRecovery(result.active ? result : null))
       .catch(() => setRecovery(null));
@@ -259,11 +263,18 @@ export default function LoginPage() {
                   <Fade in key={loginMode} timeout={250}>
                     <Box>
                       {loginMode === 'token' ? (
-                        <TextField autoFocus fullWidth label={t('login.local.pat')} type="password" autoComplete="off"
+                        <>
+                        {upstream?.provider === 'takoma' && (
+                          <Alert severity="info" variant="outlined" sx={{ mb: 2.5, borderRadius: 2 }}>
+                            {t('login.local.takomaHint')}
+                          </Alert>
+                        )}
+                        <TextField autoFocus fullWidth label={t(upstream?.provider === 'takoma' ? 'login.local.takomaToken' : 'login.local.pat')} type="password" autoComplete="off"
                           value={token} onChange={(event) => setToken(event.target.value)} onKeyDown={handleFormKeyDown}
                           disabled={loading} InputProps={{ startAdornment: <KeyRoundedIcon sx={{ mr: 1, color: alpha('#ffffff', 0.5) }} /> }}
                           sx={{ ...darkInputStyle, mb: { xs: 2, md: 4 } }}
                         />
+                        </>
                       ) : (
                         <>
                           <Alert severity="info" variant="outlined" sx={{ mb: 2.5, borderRadius: 2 }}>
@@ -287,15 +298,15 @@ export default function LoginPage() {
                         onClick={handleSubmit} sx={primaryButtonStyle}>
                         {loading ? t('login.loggingIn') : t('login.login')}
                       </Button>
-                      <Divider sx={{
+                      {upstream?.password_login !== false && <Divider sx={{
                         my: { xs: 1.5, md: 3 },
                         '&::before, &::after': { borderColor: alpha('#ffffff', 0.1) },
                       }}>
                         <Typography variant="caption" sx={{ color: alpha('#ffffff', 0.4), px: 1 }}>
                           {t('login.or')}
                         </Typography>
-                      </Divider>
-                      <Button fullWidth size="small"
+                      </Divider>}
+                      {upstream?.password_login !== false && <Button fullWidth size="small"
                         startIcon={loginMode === 'token' ? <AccountCircleRoundedIcon /> : <KeyRoundedIcon />}
                         onClick={() => {
                           setLoginMode((current) => current === 'token' ? 'password' : 'token');
@@ -303,7 +314,7 @@ export default function LoginPage() {
                         }}
                         sx={accountSwitchButtonStyle}>
                         {loginMode === 'token' ? t('login.local.useEmailPassword') : t('login.local.usePat')}
-                      </Button>
+                      </Button>}
                     </Box>
                   </Fade>
                 )}
